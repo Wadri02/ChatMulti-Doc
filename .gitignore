@@ -1,0 +1,60 @@
+# Archivos de entorno
+.env
+.env.local
+
+# Entorno virtual de Python
+.venv/
+venv/
+ENV/
+env/
+
+# Archivos compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribución / empaquetado
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ChromaDB persistente (si usas persistencia)
+chroma_db/
+*.chroma
+
+# Logs
+*.log
+
+# PDFs de prueba (opcional, puedes comentarlo si quieres versionar ejemplos)
+# pdfs/
+
+# Archivos temporales de Streamlit
+.streamlit/secrets.toml

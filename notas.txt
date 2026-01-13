@@ -1,0 +1,11 @@
+Lista de modelos de Sencente Transformers:
+
+https://huggingface.co/sentence-transformers
+
+Modelos:
+
+https://ai.google.dev/gemini-api/docs/pricing
+
+Límites:
+
+https://ai.google.dev/gemini-api/docs/rate-limits
