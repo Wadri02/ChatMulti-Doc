@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import hashlib
 import chromadb
 import google.generativeai as genai
 
@@ -34,9 +35,15 @@ if "collection" not in st.session_state:
 if "pdf_processed" not in st.session_state:
     st.session_state.pdf_processed = False
 
+if "pdf_hash" not in st.session_state:
+    st.session_state.pdf_hash = None
+
 # ============================================================
 # FUNCIONES
 # ============================================================
+def hash_pdf(file) -> str:
+    return hashlib.sha256(file.getvalue()).hexdigest()
+
 def extract_text_from_pdf(pdf_file):
     """
     Extrae texto de un PDF digital (no escaneado).
@@ -53,7 +60,7 @@ def extract_text_from_pdf(pdf_file):
     return text
 
 
-def chunk_text(text, chunk_size=500, overlap=100):
+def chunk_text(text):
     """
     Divide un texto largo en fragmentos (chunks) con solapamiento.
 
@@ -74,7 +81,8 @@ def chunk_text(text, chunk_size=500, overlap=100):
         - start_index  -> posición donde comienza en el texto original
         - size         -> longitud real del chunk
     """
-
+    chunk_size = 500 
+    overlap = 100
     chunks = []          # Aquí guardaremos todos los fragmentos
     start = 0            # Puntero que indica desde dónde empezamos a cortar
     chunk_id = 0         # Contador para asignar IDs únicos
@@ -220,15 +228,15 @@ def ask_gemini(context, question):
     model = genai.GenerativeModel("models/gemini-2.5-flash-lite")
 
     prompt = f"""
-            Eres un asistente que responde SOLO con la información del contexto.
-            Si la respuesta no está en el contexto, di: "No se encuentra en el documento".
+Eres un asistente que responde SOLO con la información del contexto.
+Si la respuesta no está en el contexto, di: "No se encuentra en el documento".
 
-            Contexto:
-            {context}
+Contexto:
+{context}
 
-            Pregunta:
-            {question}
-            """
+Pregunta:
+{question}
+"""
 
     response = model.generate_content(prompt)
     return response.text
@@ -241,6 +249,15 @@ st.title("📄 Chat con PDF + ChromaDB + Gemini")
 
 uploaded_pdf = st.file_uploader("Sube un PDF", type="pdf")
 
+# 🔄 Detectar cambio de PDF y resetear estado
+if uploaded_pdf:
+    current_hash = hash_pdf(uploaded_pdf)
+
+    if st.session_state.pdf_hash != current_hash:
+        st.session_state.pdf_hash = current_hash
+        st.session_state.pdf_processed = False
+        st.session_state.collection = None
+
 # ------------------------------
 # BOTÓN PROCESAR PDF
 # ------------------------------
@@ -248,11 +265,7 @@ if uploaded_pdf and not st.session_state.pdf_processed:
     if st.button("📥 Procesar PDF"):
         with st.spinner("Procesando PDF..."):
             text = extract_text_from_pdf(uploaded_pdf)
-
-            # 👉 Aquí puedes experimentar:
-            # chunk_size=800, overlap=150
-            chunks = chunk_text(text, chunk_size=500, overlap=100)
-
+            chunks = chunk_text(text)
             st.session_state.collection = create_chroma_collection(chunks)
             st.session_state.pdf_processed = True
 
@@ -261,7 +274,7 @@ if uploaded_pdf and not st.session_state.pdf_processed:
 # ------------------------------
 # SECCIÓN DE PREGUNTAS
 # ------------------------------
-if st.session_state.pdf_processed:
+if st.session_state.pdf_processed and st.session_state.collection:
     st.divider()
     st.subheader("❓ Pregunta al documento")
 
@@ -287,10 +300,10 @@ if st.session_state.pdf_processed:
                 zip(results["documents"][0], results["metadatas"][0])
             ):
                 st.markdown(f"""
-                            **Chunk #{meta['chunk_index']}**
-                            - 📍 Inicio en texto: `{meta['start_index']}`
-                            - 📏 Tamaño: `{meta['chunk_size']}` caracteres
+**Chunk #{meta['chunk_index']}**
+- 📍 Inicio en texto: `{meta['start_index']}`
+- 📏 Tamaño: `{meta['chunk_size']}` caracteres
 
-                            ```text
-                            {doc}
-                            """)
+```text
+{doc}
+""")

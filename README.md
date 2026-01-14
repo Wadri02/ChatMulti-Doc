@@ -202,6 +202,33 @@ graph LR
 
 ---
 
+## 🔄 Detección de Cambios de PDF
+
+La aplicación incluye un sistema inteligente de detección de cambios que evita el reprocesamiento innecesario de documentos:
+
+### Hash SHA-256
+Cada vez que subes un PDF, la aplicación genera un **hash SHA-256** único del archivo usando la biblioteca `hashlib` de Python. Este hash actúa como una "huella digital" del documento.
+
+**Cómo funciona:**
+```python
+def hash_pdf(file) -> str:
+    return hashlib.sha256(file.getvalue()).hexdigest()
+```
+
+### Reseteo Automático de Estado
+Si subes un PDF diferente (hash diferente), la aplicación automáticamente:
+- 🗑️ Limpia la colección de ChromaDB anterior
+- 🔄 Resetea el estado de procesamiento
+- 📥 Te permite procesar el nuevo documento
+
+**Beneficios:**
+- ✅ Evita procesamiento duplicado del mismo PDF
+- ✅ Detecta instantáneamente cambios en el documento
+- ✅ Mejora la eficiencia y experiencia del usuario
+- ✅ Previene errores por mezcla de datos de diferentes PDFs
+
+---
+
 ## ⚙️ Personalización
 
 ### Ajustar el tamaño de chunks
