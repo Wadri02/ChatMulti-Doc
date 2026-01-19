@@ -3,7 +3,8 @@ import os
 import hashlib
 import chromadb
 import google.generativeai as genai
-
+import pandas as pd # Para Excel y CSV
+import docx # Para Word 
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
@@ -11,7 +12,7 @@ from dotenv import load_dotenv
 # ============================================================
 # CONFIGURACIÓN GENERAL
 # ============================================================
-st.set_page_config(page_title="Chat PDF con Gemini")
+st.set_page_config(page_title="Chat Multi-Documento con Gemini")
 
 # Carga variables de entorno desde .env
 # Aquí se espera GOOGLE_API_KEY=xxxx
@@ -32,30 +33,53 @@ client = chromadb.Client()
 if "collection" not in st.session_state:
     st.session_state.collection = None
 
-if "pdf_processed" not in st.session_state:
-    st.session_state.pdf_processed = False
+if "file_processed" not in st.session_state:
+    st.session_state.file_processed = False
 
-if "pdf_hash" not in st.session_state:
-    st.session_state.pdf_hash = None
+if "file_hash" not in st.session_state:
+    st.session_state.file_hash = None
 
 # ============================================================
 # FUNCIONES
 # ============================================================
-def hash_pdf(file) -> str:
+def hash_file(file) -> str:
     return hashlib.sha256(file.getvalue()).hexdigest()
 
-def extract_text_from_pdf(pdf_file):
+def extract_text(pdf_file):
     """
     Extrae texto de un PDF digital (no escaneado).
     Incluye el número de página como marcador.
     """
-    reader = PdfReader(pdf_file)
+    file_extension = uploaded_file.name.split('.')[-1].lower()
     text = ""
 
-    for i, page in enumerate(reader.pages):
-        content = page.extract_text()
-        if content:
-            text += f"\n[Página {i+1}]\n{content}"
+    try:
+        if file_extension == "pdf":
+            reader = PdfReader(uploaded_file)
+            for i, page in enumerate(reader.pages):
+                content = page.extract_text()
+                if content:
+                    text += f"\n[Página {i+1}]\n{content}"
+
+        elif file_extension == "docx":
+            doc = docx.Document(uploaded_file)
+            text = "\n".join([para.text for para in doc.paragraphs])
+
+        elif file_extension == "txt":
+            text = uploaded_file.read().decode("utf-8")
+
+        elif file_extension in ["xlsx", "xls"]:
+            df = pd.read_excel(uploaded_file)
+            # Convertimos el DataFrame a una cadena de texto legible
+            text = "Datos de la tabla:\n" + df.to_string(index=False)
+
+        elif file_extension == "csv":
+            df = pd.read_csv(uploaded_file)
+            text = "Datos del CSV:\n" + df.to_string(index=False)
+            
+    except Exception as e:
+        st.error(f"Error al procesar el archivo: {e}")
+        return None
 
     return text
 
@@ -139,7 +163,7 @@ def create_chroma_collection(chunks):
     # ------------------------------
     # Si ya existe una colección con el mismo nombre ("pdf_rag"),
     try:
-        client.delete_collection("pdf_rag")
+        client.delete_collection("multi_doc_rag")
     except:
         # Si la colección no existe, Chroma lanza error.
         # Lo ignoramos porque es un caso esperado.
@@ -152,7 +176,7 @@ def create_chroma_collection(chunks):
     # - una tabla de documentos
     # - un índice vectorial
     # - espacio para metadatos
-    collection = client.create_collection(name="pdf_rag")
+    collection = client.create_collection(name="multi_doc_rag")
 
     # ------------------------------
     # 3️⃣ Separar texto de metadata
@@ -245,40 +269,42 @@ Pregunta:
 # INTERFAZ
 # ============================================================
 
-st.title("📄 Chat con PDF + ChromaDB + Gemini")
+st.title("📂 Chat Multi-Documento Inteligente")
 
-uploaded_pdf = st.file_uploader("Sube un PDF", type="pdf")
+uploaded_file = st.file_uploader(
+    "Selecciona un archivo", 
+    type=["pdf", "docx", "txt", "xlsx", "csv"]
+)
 
 # 🔄 Detectar cambio de PDF y resetear estado
-if uploaded_pdf:
-    current_hash = hash_pdf(uploaded_pdf)
+if uploaded_file:
+    current_hash = hash_file(uploaded_file)
 
-    if st.session_state.pdf_hash != current_hash:
-        st.session_state.pdf_hash = current_hash
-        st.session_state.pdf_processed = False
+    if st.session_state.file_hash != current_hash:
+        st.session_state.file_hash = current_hash
+        st.session_state.file_processed = False
         st.session_state.collection = None
 
 # ------------------------------
 # BOTÓN PROCESAR PDF
 # ------------------------------
-if uploaded_pdf and not st.session_state.pdf_processed:
-    if st.button("📥 Procesar PDF"):
-        with st.spinner("Procesando PDF..."):
-            text = extract_text_from_pdf(uploaded_pdf)
-            chunks = chunk_text(text)
-            st.session_state.collection = create_chroma_collection(chunks)
-            st.session_state.pdf_processed = True
-
-        st.success(f"PDF procesado ✅ ({len(chunks)} fragmentos)")
+if uploaded_file and not st.session_state.file_processed:
+    if st.button("📥 Procesar Documento"):
+        with st.spinner("Analizando contenido..."):
+            raw_text = extract_text(uploaded_file)
+            if raw_text:
+                chunks = chunk_text(raw_text)
+                st.session_state.collection = create_chroma_collection(chunks)
+                st.session_state.file_processed = True
+                st.success(f"¡Listo! Documento fragmentado en {len(chunks)} partes.")
 
 # ------------------------------
 # SECCIÓN DE PREGUNTAS
 # ------------------------------
-if st.session_state.pdf_processed and st.session_state.collection:
+if st.session_state.file_processed and st.session_state.collection:
     st.divider()
-    st.subheader("❓ Pregunta al documento")
 
-    question = st.text_input("Escribe tu pregunta")
+    question = st.text_input("¿Qué deseas saber sobre el archivo?")
 
     if st.button("🤖 Preguntar") and question:
         with st.spinner("Buscando respuesta..."):
