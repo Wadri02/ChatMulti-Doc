@@ -3,6 +3,7 @@ import os
 import hashlib
 import chromadb
 import google.generativeai as genai
+from openai import OpenAI
 import pandas as pd # Para Excel y CSV
 import docx # Para Word 
 from pypdf import PdfReader
@@ -18,6 +19,11 @@ st.set_page_config(page_title="Chat Multi-Documento con Gemini")
 # Aquí se espera GOOGLE_API_KEY=xxxx
 load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# Carga de OpenAi con openrouter
+client_ai = OpenAI(
+  base_url="https://openrouter.ai/api/v1",
+  api_key=os.getenv("OPENAI_API_KEY"),
+)
 
 # Modelo de embeddings local
 # Se puede cambiar por otros modelos de sentence-transformers
@@ -244,33 +250,48 @@ def retrieve_context(collection, query, k=4):
     return results
 
 
-def ask_gemini(context, question):
+def ask_ia(provider ,context, question):
     """
-    Llama a Gemini usando el contexto recuperado.
+    Llama a Gemini o ChatGPT usando el contexto recuperado.
     El prompt fuerza comportamiento RAG (no inventar).
     """
-    model = genai.GenerativeModel("models/gemini-2.5-flash-lite")
-
     prompt = f"""
-Eres un asistente que responde SOLO con la información del contexto.
-Si la respuesta no está en el contexto, di: "No se encuentra en el documento".
+    Eres un asistente que responde SOLO con la información del contexto.
+    Si la respuesta no está en el contexto, di: "No se encuentra en el documento".
 
-Contexto:
-{context}
+    Contexto:
+    {context}
 
-Pregunta:
-{question}
-"""
+    Pregunta:
+    {question}
+    """
 
-    response = model.generate_content(prompt)
-    return response.text
+    try:
+        if provider == "Gemini (Google)":
+            model = genai.GenerativeModel("models/gemini-2.5-flash-lite")
+            response = model.generate_content(prompt)
+            return response.text
+        
+        elif provider == "ChatGPT (OpenAI)":
+            #comunicacion con el server de openrouter 
+            response = client_ai.chat.completions.create(
+            model="openai/gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}]
+        )
+            return response.choices[0].message.content
+    except Exception as e:
+        return f"Error con el proveedor {provider}: {str(e)}"
 
 # ============================================================
 # INTERFAZ
 # ============================================================
 
 st.title("📂 Chat Multi-Documento")
-
+with st.sidebar:
+    st.header("⚙️ Configuración")
+    ai_provider = st.selectbox("Elegir IA", ["Gemini (Google)", "ChatGPT (OpenAI)"])
+    st.info(f"Modelo actual: {'gemini-1.5-flash' if 'Gemini' in ai_provider else 'gpt-4o-mini'}")
+    
 uploaded_file = st.file_uploader(
     "Selecciona un archivo", 
     type=["pdf", "docx", "txt", "xlsx", "csv"]
@@ -307,13 +328,13 @@ if st.session_state.file_processed and st.session_state.collection:
     question = st.text_input("¿Qué deseas saber sobre el archivo?")
 
     if st.button("🤖 Preguntar") and question:
-        with st.spinner("Buscando respuesta..."):
+        with st.spinner("Buscando respuesta con {ai_provider}..."):
             results = retrieve_context(st.session_state.collection, question)
 
             # Unimos los documentos para Gemini
             context_text = "\n\n".join(results["documents"][0])
 
-            answer = ask_gemini(context_text, question)
+            answer = ask_ia(ai_provider,context_text, question)
 
         st.subheader("🤖 Respuesta")
         st.write(answer)
