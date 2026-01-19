@@ -45,9 +45,9 @@ if "file_hash" not in st.session_state:
 def hash_file(file) -> str:
     return hashlib.sha256(file.getvalue()).hexdigest()
 
-def extract_text(pdf_file):
+def extract_text(uploaded_file):
     """
-    Extrae texto de un PDF digital (no escaneado).
+    Extrae texto de un documento(txt, word, excel, pdf) (no escaneado).
     Incluye el número de página como marcador.
     """
     file_extension = uploaded_file.name.split('.')[-1].lower()
@@ -161,7 +161,7 @@ def create_chroma_collection(chunks):
     # ------------------------------
     # 1️⃣ Borrado defensivo
     # ------------------------------
-    # Si ya existe una colección con el mismo nombre ("pdf_rag"),
+    # Si ya existe una colección con el mismo nombre ("multi_doc_rag"),
     try:
         client.delete_collection("multi_doc_rag")
     except:
@@ -269,14 +269,14 @@ Pregunta:
 # INTERFAZ
 # ============================================================
 
-st.title("📂 Chat Multi-Documento Inteligente")
+st.title("📂 Chat Multi-Documento")
 
 uploaded_file = st.file_uploader(
     "Selecciona un archivo", 
     type=["pdf", "docx", "txt", "xlsx", "csv"]
 )
 
-# 🔄 Detectar cambio de PDF y resetear estado
+# 🔄 Detectar cambio de documento y resetear estado
 if uploaded_file:
     current_hash = hash_file(uploaded_file)
 
@@ -286,7 +286,7 @@ if uploaded_file:
         st.session_state.collection = None
 
 # ------------------------------
-# BOTÓN PROCESAR PDF
+# BOTÓN PROCESAR DOCUMENTO
 # ------------------------------
 if uploaded_file and not st.session_state.file_processed:
     if st.button("📥 Procesar Documento"):
@@ -303,7 +303,7 @@ if uploaded_file and not st.session_state.file_processed:
 # ------------------------------
 if st.session_state.file_processed and st.session_state.collection:
     st.divider()
-
+    
     question = st.text_input("¿Qué deseas saber sobre el archivo?")
 
     if st.button("🤖 Preguntar") and question:
